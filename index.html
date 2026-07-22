@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TotalControl ESP32 Dashboard</title>
+    
+    <!-- Chart.js for high performance real-time charting -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Main Styles -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- TOP NAVIGATION & GLOBAL STATUS -->
+        <header class="topbar glass-panel">
+            <div class="logo">
+                <span>PELTIER CONTROL TFG</span>
+            </div>
+
+            <div class="connection-panel">
+                <input type="text" id="ws-ip" value="10.227.162.137" placeholder="ESP32 IP or .local">
+                <button id="btn-connect" class="btn-primary" data-i18n="btn_connect">Connect</button>
+                <span id="conn-status" class="status-indicator offline" data-i18n="status_offline">Offline</span>
+            </div>
+
+            <div class="global-actions" style="display: flex; gap: 10px; align-items: center;">
+                <button id="btn-theme-toggle" class="btn-secondary" title="Toggle Light/Dark Theme" style="padding: 6px 12px; border-radius: 50px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="icon-theme-dark"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="icon-theme-light" style="display: none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                </button>
+                
+                <select id="lang-select" class="custom-select" style="padding: 6px; border-radius: 6px; width: auto; min-width: 0;">
+                    <option value="en">EN</option>
+                    <option value="ca">CA</option>
+                    <option value="es">ES</option>
+                </select>
+
+                <button id="btn-set-dir" class="btn-secondary" title="Choose where to save CSV logs">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span data-i18n="btn_folder">Set CSV Folder</span>
+                </button>
+                <div id="dir-status" class="status-text" data-i18n="status_no_folder">No folder selected</div>
+            </div>
+        </header>
+
+        <!-- MAIN LAYOUT -->
+        <div id="lockable-ui" class="main-layout locked">
+            
+            <!-- RIGHT CONTENT AREA (DYNAMIC) -->
+            <main id="content-area" class="content-area">
+                
+                <!-- VIEW 0: MAIN MENU -->
+                <div id="view-menu" class="view active">
+                    <h1 class="welcome-title" data-i18n="menu_title">Select Operational Mode</h1>
+                    <div class="mode-cards">
+                        <div class="mode-card" data-target="view-manual">
+                            <div class="card-icon manual-icon"></div>
+                            <h2 data-i18n="menu_manual_title">Manual Voltage</h2>
+                            <p data-i18n="menu_manual_desc">Apply direct voltage to the Peltier cell and monitor real-time thermal response.</p>
+                        </div>
+                        <div class="mode-card" data-target="view-reference">
+                            <div class="card-icon reference-icon"></div>
+                            <h2 data-i18n="menu_ref_title">Reference Testing</h2>
+                            <p data-i18n="menu_ref_desc">Evaluate closed-loop controllers (PID, MPC, Fuzzy) with precise temperature targets.</p>
+                        </div>
+                        <div class="mode-card" data-target="view-plant">
+                            <div class="card-icon plant-icon"></div>
+                            <h2 data-i18n="menu_plant_title">Plant Experiment</h2>
+                            <p data-i18n="menu_plant_desc">Run automated step-response experiments for system identification.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 1: MANUAL VOLTAGE -->
+                <div id="view-manual" class="view hidden">
+                    <div class="view-header">
+                        <button class="btn-back">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> <span data-i18n="btn_back">Back</span>
+                        </button>
+                        <h2 data-i18n="manual_title">Manual Voltage Control</h2>
+                        <button id="btn-manual-log" class="btn-log off" data-i18n="btn_start_log">Start Log</button>
+                    </div>
+                    <div class="view-content layout-split">
+                        <div class="control-panel-horizontal glass-panel">
+                            <div class="input-group">
+                                <input type="number" id="manual-voltage-input" step="0.1" min="-12" max="12" placeholder="Voltage (e.g. 5.5)" data-i18n-placeholder="manual_voltage_ph">
+                                <span class="unit">V</span>
+                            </div>
+                            <button id="btn-manual-set" class="btn-primary" data-i18n="btn_apply_voltage">Apply Voltage</button>
+                            <div class="stat-box-small" style="margin-left: 20px;">
+                                <span class="label" data-i18n="label_applied">Applied (u)</span>
+                                <span id="manual-u" class="value">0.00</span> V
+                            </div>
+                        </div>
+                        <div class="charts-panel" style="flex-direction: row;">
+                            <div class="chart-container glass-panel"><canvas id="manual-chart-temp"></canvas></div>
+                            <div class="chart-container glass-panel"><canvas id="manual-chart-volt"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: REFERENCE TESTING -->
+                <div id="view-reference" class="view hidden">
+                    <div class="view-header">
+                        <button class="btn-back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> <span data-i18n="btn_back">Back</span></button>
+                        <h2 data-i18n="ref_title">Reference Testing</h2>
+                        <button id="btn-ref-log" class="btn-log off" data-i18n="btn_start_log">Start Log</button>
+                    </div>
+                    <div class="view-content layout-sidebar">
+                        <div class="sidebar-panel glass-panel">
+                            <select id="ref-controller-select" class="custom-select">
+                                <option value="" disabled selected data-i18n="ref_select">Select Core Controller...</option>
+                                <option value="P">P</option>
+                                <option value="I">I</option>
+                                <option value="PI">PI</option>
+                                <option value="PD">PD</option>
+                                <option value="PID">PID</option>
+                                <option value="MPC" data-i18n="ref_opt_mpc">MPC (Explicit Model Predictive)</option>
+                                <option value="HYST" data-i18n="ref_opt_hyst">ON-OFF Hysteresis</option>
+                                <option value="FUZZY" data-i18n="ref_opt_fuzzy">Fuzzy PD+I Parallel (Mamdani)</option>
+                            </select>
+                            
+                            <div id="ref-addon-container" style="display: none; flex-direction: column; gap:10px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                                <!-- Dynamically populated by JS -->
+                            </div>
+                            
+                            <div class="input-group">
+                                <input type="number" id="ref-target-input" step="0.1" placeholder="Reference Temperature (°C)" data-i18n-placeholder="ref_target">
+                                <span class="unit">°C</span>
+                            </div>
+                            
+                            <button id="btn-ref-set" class="btn-primary" style="padding: 12px; font-size: 1.1rem;" data-i18n="btn_start_control">Start Control</button>
+                            
+                            <div class="live-stats-vertical">
+                                <div class="stat-box-small"><span class="label">Tin</span><span id="ref-val-tin" class="value">---</span></div>
+                                <div class="stat-box-small"><span class="label">Tout</span><span id="ref-val-tout" class="value">---</span></div>
+                                <div class="stat-box-small"><span class="label">Ref</span><span id="ref-val-ref" class="value">---</span></div>
+                                <div class="stat-box-small"><span class="label">Error</span><span id="ref-val-err" class="value">---</span></div>
+                                <div class="stat-box-small"><span class="label">u_o</span><span id="ref-val-uo" class="value">---</span></div>
+                                <div class="stat-box-small"><span class="label">u</span><span id="ref-val-u" class="value">---</span></div>
+                            </div>
+                        </div>
+
+                        <div class="charts-panel">
+                            <div class="chart-grid">
+                                <div class="chart-container glass-panel"><canvas id="ref-chart-temp"></canvas></div>
+                                <div class="chart-container glass-panel"><canvas id="ref-chart-err"></canvas></div>
+                                <div class="chart-container glass-panel"><canvas id="ref-chart-volt"></canvas></div>
+                                <div class="chart-container glass-panel"><canvas id="ref-chart-sat"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 3: PLANT EXPERIMENT -->
+                <div id="view-plant" class="view hidden">
+                    <div class="view-header">
+                        <button class="btn-back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> <span data-i18n="btn_back">Back</span></button>
+                        <h2 data-i18n="plant_title">Plant Experiment</h2>
+                        <div id="plant-log-status" class="status-badge inactive" data-i18n="status_log_inactive">Log Inactive</div>
+                    </div>
+                    <div class="view-content layout-sidebar">
+                        <div class="sidebar-panel glass-panel">
+                            <p class="description" style="color: var(--text-secondary); line-height: 1.4; text-align: justify;" data-i18n="plant_desc">
+                                Executes a predefined sequence of cooling and voltage steps for system identification. Logs are saved automatically.
+                            </p>
+                            <button id="btn-plant-start" class="btn-primary" style="padding: 15px; font-size: 1.1rem; margin-top: 10px;" data-i18n="btn_start_exp">START EXPERIMENT (E)</button>
+                            
+                            <div class="terminal-container fill-height" style="margin-top: 20px;">
+                                <div class="terminal-header" data-i18n="plant_csv">CSV Data Stream</div>
+                                <div id="plant-terminal" class="terminal-output"></div>
+                            </div>
+                        </div>
+                        <div class="charts-panel" style="flex-direction: column;">
+                            <div class="chart-container glass-panel"><canvas id="plant-chart-temp"></canvas></div>
+                            <div class="chart-container glass-panel"><canvas id="plant-chart-volt"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+        
+        <!-- GLOBAL DOCK (Always visible, symmetrical) -->
+        <div id="global-dock" class="global-dock glass-panel locked">
+            <div class="dock-item">
+                <div class="dock-telemetry">
+                    <span class="label">T_in</span>
+                    <div class="value-group"><span id="global-tin" class="value">---</span><span class="unit">°C</span></div>
+                </div>
+            </div>
+            
+            <div class="dock-item" style="margin-left: 20px;">
+                <button id="btn-toggle-temp" class="btn-toggle off" title="Enable/Disable Temp Reading (T)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+                    <span data-i18n="dock_sensors">Sensors</span>
+                </button>
+            </div>
+            
+            <div class="dock-item stop-item" style="margin: 0 10px;">
+                <button id="btn-emergency-stop" class="btn-stop" title="Halt all operations (S)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/></svg>
+                    <span data-i18n="dock_stop">EMERGENCY STOP</span>
+                </button>
+            </div>
+            
+            <div class="dock-item" style="margin-right: 20px;">
+                <button id="btn-toggle-fan" class="btn-toggle off" title="Enable/Disable Cooling Fan (F)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M12 12L2.5 6.5M12 12l9.5-5.5M12 12L2.5 17.5M12 12l9.5 5.5"/></svg>
+                    <span data-i18n="dock_fan">Fan</span>
+                </button>
+            </div>
+            
+            <div class="dock-item">
+                <div class="dock-telemetry">
+                    <span class="label">T_out</span>
+                    <div class="value-group"><span id="global-tout" class="value">---</span><span class="unit">°C</span></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Main Logic -->
+    <script src="js/app.js"></script>
+</body>
+</html>
