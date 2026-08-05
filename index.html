@@ -10,7 +10,7 @@
     <title>Peltier Control Dashboard</title>
     
     <!-- Chart.js for high performance real-time charting -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="lib/chart.js"></script>
     
     <!-- Main Styles -->
     <link rel="stylesheet" href="css/style.css">
@@ -24,7 +24,7 @@
             </div>
 
             <div class="connection-panel">
-                <input type="text" id="ws-ip" value="10.227.162.137" placeholder="ESP32 IP or .local">
+                <input type="text" id="ws-ip" value="192.168.4.1" placeholder="ESP32 IP or .local">
                 <button id="btn-connect" class="btn-primary" data-i18n="btn_connect">Connect</button>
                 <span id="conn-status" class="status-indicator offline" data-i18n="status_offline">Offline</span>
             </div>
@@ -114,25 +114,65 @@
                     </div>
                     <div class="view-content layout-sidebar">
                         <div class="sidebar-panel glass-panel">
-                            <select id="ref-controller-select" class="custom-select">
-                                <option value="" disabled selected data-i18n="ref_select">Select Core Controller...</option>
-                                <option value="P">P</option>
-                                <option value="I">I</option>
-                                <option value="PI">PI</option>
-                                <option value="PD">PD</option>
-                                <option value="PID">PID</option>
-                                <option value="MPC" data-i18n="ref_opt_mpc">MPC (Explicit Model Predictive)</option>
-                                <option value="HYST" data-i18n="ref_opt_hyst">ON-OFF Hysteresis</option>
-                                <option value="FUZZY" data-i18n="ref_opt_fuzzy">Fuzzy PD+I Parallel (Mamdani)</option>
-                            </select>
-                            
-                            <div id="ref-addon-container" style="display: none; flex-direction: column; gap:10px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
-                                <!-- Dynamically populated by JS -->
+                            <div style="display: flex; gap: 8px; position: relative; width: 100%;">
+                                <select id="ref-controller-select" class="custom-select" style="flex: 1;">
+                                    <option value="" disabled selected data-i18n="ref_select">Select Core Controller...</option>
+                                    <option value="P">P</option>
+                                    <option value="I">I</option>
+                                    <option value="PI">PI</option>
+                                    <option value="PD">PD</option>
+                                    <option value="PID">PID</option>
+                                    <option value="MPC" data-i18n="ref_opt_mpc">MPC (Explicit Model Predictive)</option>
+                                    <option value="HYST" data-i18n="ref_opt_hyst">ON-OFF Hysteresis</option>
+                                    <option value="FUZZY" data-i18n="ref_opt_fuzzy">Fuzzy PD+I Parallel (Mamdani)</option>
+                                </select>
+                                <button id="btn-ref-addons" class="btn-secondary" style="display: none; padding: 0 10px; border-radius: 6px; align-items: center; justify-content: center;" title="Configure Addons">⚙️</button>
+                                
+                                <div id="ref-addon-container" style="display: none; flex-direction: column; gap:10px; background: var(--panel-bg); backdrop-filter: blur(15px); padding: 15px; border-radius: 8px; position: absolute; z-index: 1000; top: calc(100% + 5px); right: 0; min-width: 200px; border: 1px solid var(--panel-border); box-shadow: var(--shadow-soft);">
+                                    <!-- Dynamically populated by JS -->
+                                </div>
                             </div>
                             
-                            <div class="input-group">
+                            <!-- Mode Toggle -->
+                            <div class="sequence-mode-toggle">
+                                <button id="mode-constant" class="mode-btn active" data-i18n="mode_constant">Constant</button>
+                                <button id="mode-sequence" class="mode-btn" data-i18n="mode_sequence">Sequence</button>
+                                <button id="mode-csv" class="mode-btn">CSV</button>
+                            </div>
+
+                            <!-- Constant Input -->
+                            <div id="container-constant-ref" class="input-group">
                                 <input type="number" id="ref-target-input" step="0.1" placeholder="Reference Temperature (°C)" data-i18n-placeholder="ref_target">
                                 <span class="unit">°C</span>
+                            </div>
+
+                            <!-- Sequence Builder -->
+                            <div id="container-sequence-ref" class="sequence-builder" style="display: none;">
+                                <div id="sequence-list" class="sequence-list">
+                                    <!-- Sequence items will be injected here -->
+                                </div>
+                                <div class="sequence-actions">
+                                    <button id="btn-add-step" class="btn-secondary btn-sm">+ Step</button>
+                                    <button id="btn-add-ramp" class="btn-secondary btn-sm">+ Ramp</button>
+                                </div>
+                                <div id="sequence-status" class="sequence-status inactive">
+                                    Ready (0/5 items)
+                                </div>
+                            </div>
+                            
+                            <!-- CSV Builder -->
+                            <div id="container-csv-ref" class="csv-builder" style="display: none;">
+                                <input type="file" id="csv-ref-upload" accept=".csv" class="csv-file-input">
+                                <div id="csv-interp-container" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.1); border-radius: 8px;">
+                                    <span data-i18n="csv_interp_prompt" style="font-weight: 500; font-size: 0.9rem;">Select Interpolation Method:</span>
+                                    <div style="display: flex; gap: 15px;">
+                                        <label style="cursor: pointer; display: flex; align-items: center; gap: 5px;"><input type="radio" name="csv-interp" value="step"> <span data-i18n="seq_step">Step</span></label>
+                                        <label style="cursor: pointer; display: flex; align-items: center; gap: 5px;"><input type="radio" name="csv-interp" value="ramp"> <span data-i18n="seq_ramp">Ramp</span></label>
+                                    </div>
+                                </div>
+                                <div id="csv-status" class="sequence-status inactive">
+                                    No CSV loaded
+                                </div>
                             </div>
                             
                             <button id="btn-ref-set" class="btn-primary" style="padding: 12px; font-size: 1.1rem;" data-i18n="btn_start_control">Start Control</button>
@@ -230,7 +270,7 @@
     <!-- Main Logic -->
     <script src="js/app.js"></script>
     <script>
-        if ('serviceWorker' in navigator) {
+        if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
                     .then(reg => console.log('SW registered!', reg))
